@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor de arquivos de inventário</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #E57548;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            max-width: 800px;
+            width: 90%;
+            margin: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .logo {
+            max-height: 60px;
+            width: auto;
+        }
+        .header h1 {
+            color: #333;
+            text-align: right;
+            font-size: 1.5em;
+            margin: 0;
+        }
+        .converter-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        select, input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        select:focus, input[type="file"]:focus {
+            outline: none;
+            border-color: #E57548;
+            box-shadow: 0 0 3px #E57548;
+        }
+        button {
+            background-color: #E57548;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #d45f33;
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+        #status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: none;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+            display: block !important;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+            display: block !important;
+        }
+        .info-text {
+            font-size: 12px;
+            color: #777;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiWLqHPnBBssWxqrpUTjJ02MrY-EuouE_eBrTJq9cWEZf3hmlHJ2Khe3O5_n0Lu2SQaSFhqtnHP7jkskA2SlrDs_8rMx9DvlLQcKaKvFL2u64RWe2ubfVLSTeksB29Xo0x2ZBUja0oWhss/s1600/Normatel-logo.png" alt="Logo" class="logo" onerror="this.style.display='none'">
+            <h1>Conversor de arquivos de inventário</h1>
+        </div>
+        
+        <div class="converter-section">
+            <div class="form-group">
+                <label for="filial">Selecione a filial:</label>
+                <select id="filial">
+                    <option value="01">01</option>
+                    <option value="02">02</option>
+                    <option value="03">03</option>
+                    <option value="05">05</option>
+                    <option value="07">07</option>
+                    <option value="08">08</option>
+                    <option value="09">09</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                    <option value="13">13</option>
+                    <option value="14">14</option>
+                    <option value="15">15</option>
+                    <option value="16">16</option>
+                    <option value="17">17</option>
+                    <option value="18">18</option>
+                    <option value="19">19</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="tipoConversao">Tipo de conversão:</label>
+                <select id="tipoConversao">
+                    <option value="csvToExcel">Retorno: CSV para Excel</option>
+                    <option value="excelToCsv">Retorno: Excel para CSV</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="arquivoEntrada">Selecione o arquivo de entrada:</label>
+                <input type="file" id="arquivoEntrada" accept=".csv,.txt,.xlsx,.xls">
+                <div class="info-text" id="fileFormatInfo"></div>
+            </div>
+            <button id="converterBtn">Converter</button>
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const converterBtn = document.getElementById('converterBtn');
+            const statusDiv = document.getElementById('status');
+            const filialSelect = document.getElementById('filial');
+            const tipoSelect = document.getElementById('tipoConversao');
+            const fileInput = document.getElementById('arquivoEntrada');
+            const fileFormatInfo = document.getElementById('fileFormatInfo');
+
+            // Atualiza info do formato baseado na seleção
+            tipoSelect.addEventListener('change', function() {
+                if (this.value === 'csvToExcel') {
+                    fileFormatInfo.textContent = 'Formatos aceitos: CSV ou TXT (separado por vírgula ou ponto e vírgula)';
+                    fileInput.accept = '.csv,.txt';
+                } else {
+                    fileFormatInfo.textContent = 'Formatos aceitos: XLSX ou XLS';
+                    fileInput.accept = '.xlsx,.xls';
+                }
+                fileInput.value = '';
+                statusDiv.style.display = 'none';
+            });
+
+            tipoSelect.dispatchEvent(new Event('change'));
+
+            converterBtn.addEventListener('click', function() {
+                if (!fileInput.files.length) {
+                    showStatus("Por favor, selecione um arquivo.", "error");
+                    return;
+                }
+
+                const tipo = tipoSelect.value;
+                const filial = filialSelect.value;
+                const file = fileInput.files[0];
+
+                if (tipo === 'csvToExcel') {
+                    if (!file.name.match(/\.(csv|txt)$/i)) {
+                        showStatus("Por favor, selecione um arquivo CSV ou TXT válido.", "error");
+                        return;
+                    }
+                    convertCsvToExcel(file, filial);
+                } else {
+                    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                        showStatus("Por favor, selecione um arquivo Excel (XLSX ou XLS) válido.", "error");
+                        return;
+                    }
+                    convertExcelToCsv(file, filial);
+                }
+            });
+
+            function convertCsvToExcel(file, filial) {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    try {
+                        const content = e.target.result;
+
+                        const lines = content.split('\n').filter(line => line.trim() !== '');
+                        if (lines.length === 0) {
+                            throw new Error("Arquivo vazio.");
+                        }
+
+                        const firstLine = lines[0];
+                        const commaCount = (firstLine.match(/,/g) || []).length;
+                        const semicolonCount = (firstLine.match(/;/g) || []).length;
+                        const separator = semicolonCount > commaCount ? ';' : ',';
+
+                        const excelData = [];
+
+                        const headerMap = {
+                            'B7_COD': 'PRODUTO',
+                            'B7_TIPO': 'TIPO',
+                            'B7_LOCAL': 'LOCAL',
+                            'B7_DOC': 'DOCUMENTO',
+                            'B7_QUANT': 'QUANTIDADE',
+                            'B7_LOTECTL': 'LOTE',
+                            'B7_DATA': 'DATA',
+                            'B7_YCODMOT': 'MOTIVO'
+                        };
+
+                        const headerLine = lines[0].split(separator).map(h => h.trim().replace(/^"|"$/g, ''));
+                        const newHeader = headerLine.map(h => headerMap[h] || h);
+                        excelData.push(newHeader);
+
+                        for (let i = 1; i < lines.length; i++) {
+                            if (lines[i].trim() === '') continue;
+
+                            const row = parseCSVLine(lines[i], separator);
+
+                            const cleanRow = row.map((cell, index) => {
+                                cell = cell.trim();
+                                cell = cell.replace(/^"|"$/g, '');
+
+                                // QUANTIDADE
+                                if (index === 4) {
+                                    const numeroFormatado = cell.replace(/\./g, '').replace(',', '.');
+                                    const numero = parseFloat(numeroFormatado);
+                                    return isNaN(numero) ? 0 : numero;
+                                }
+
+                                return cell;
+                            });
+
+                            excelData.push(cleanRow);
+                        }
+
+                        const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+                        const workbook = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(workbook, worksheet, "Dados");
+
+                        const dataAtual = new Date();
+                        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                        const mes = meses[dataAtual.getMonth()];
+                        const ano = dataAtual.getFullYear();
+
+                        const nomeArquivo = `RetEdit_${filial}_${mes}_${ano}.xlsx`;
+
+                        XLSX.writeFile(workbook, nomeArquivo);
+
+                        showStatus("Arquivo Excel gerado com sucesso!", "success");
+                    } catch (error) {
+                        showStatus("Erro ao processar o arquivo: " + error.message, "error");
+                        console.error(error);
+                    }
+                };
+
+                reader.onerror = function() {
+                    showStatus("Erro ao ler o arquivo.", "error");
+                };
+
+                reader.readAsText(file, 'UTF-8');
+            }
+
+            function convertExcelToCsv(file, filial) {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {
+                            type: 'array',
+                            cellDates: true,
+                            raw: false
+                        });
+
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+                            header: 1,
+                            defval: '',
+                            raw: false
+                        });
+
+                        if (jsonData.length === 0) {
+                            throw new Error("Arquivo vazio ou sem dados.");
+                        }
+
+                        const headerMap = {
+                            'PRODUTO': 'B7_COD',
+                            'TIPO': 'B7_TIPO',
+                            'LOCAL': 'B7_LOCAL',
+                            'DOCUMENTO': 'B7_DOC',
+                            'QUANTIDADE': 'B7_QUANT',
+                            'LOTE': 'B7_LOTECTL',
+                            'DATA': 'B7_DATA',
+                            'MOTIVO': 'B7_YCODMOT'
+                        };
+
+                        const headerLine = jsonData[0].map(h => String(h).trim());
+                        const newHeader = headerLine.map(h => headerMap[h] || h);
+
+                        // Garante que a última coluna exportada seja B7_YCODMOT
+                        const lastValidColumnName = 'B7_YCODMOT';
+                        const lastValidIndex = newHeader.indexOf(lastValidColumnName);
+
+                        if (lastValidIndex === -1) {
+                            throw new Error("A coluna B7_YCODMOT não foi encontrada no arquivo.");
+                        }
+
+                        const trimmedHeader = newHeader.slice(0, lastValidIndex + 1);
+
+                        let csvContent = '';
+                        csvContent += trimmedHeader.join(';') + '\n';
+
+                        for (let i = 1; i < jsonData.length; i++) {
+                            const row = jsonData[i];
+                            if (row.length === 0 || (row.length === 1 && row[0] === '')) continue;
+
+                            const trimmedRow = row.slice(0, lastValidIndex + 1);
+
+                            const processedRow = trimmedRow.map((cell, index) => {
+                                let cellValue = cell;
+
+                                // Trata especificamente a coluna DATA
+                                if (trimmedHeader[index] === 'B7_DATA') {
+                                    cellValue = formatDateToDDMMYYYY(cellValue);
+                                } else {
+                                    cellValue = cellValue !== undefined && cellValue !== null ? String(cellValue) : '';
+                                    cellValue = cellValue.replace(/\n/g, ' ').trim();
+                                }
+
+                                return cellValue;
+                            });
+
+                            csvContent += processedRow.join(';') + '\n';
+                        }
+
+                        const dataAtual = new Date();
+                        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                        const mes = meses[dataAtual.getMonth()];
+                        const ano = dataAtual.getFullYear();
+
+                        const nomeArquivo = `Retorno_${filial}_${mes}_${ano}.csv`;
+
+                        const bom = "\uFEFF";
+                        downloadFile(nomeArquivo, bom + csvContent);
+
+                        showStatus("Arquivo CSV gerado com sucesso!", "success");
+                    } catch (error) {
+                        showStatus("Erro ao processar o arquivo: " + error.message, "error");
+                        console.error(error);
+                    }
+                };
+
+                reader.onerror = function() {
+                    showStatus("Erro ao ler o arquivo.", "error");
+                };
+
+                reader.readAsArrayBuffer(file);
+            }
+
+            function formatDateToDDMMYYYY(value) {
+                if (value === undefined || value === null || value === '') {
+                    return '';
+                }
+
+                // Se já vier como objeto Date
+                if (value instanceof Date && !isNaN(value)) {
+                    return formatDateObject(value);
+                }
+
+                // Se vier como número serial do Excel
+                if (typeof value === 'number' && !isNaN(value)) {
+                    return excelSerialToDateString(value);
+                }
+
+                // Se vier como texto
+                let text = String(value).trim();
+
+                // Caso esteja no formato ISO ou semelhante interpretável por Date
+                const parsedDate = new Date(text);
+                if (!isNaN(parsedDate) && /\d/.test(text)) {
+                    return formatDateObject(parsedDate);
+                }
+
+                // Caso já esteja em DD/MM/AAAA, apenas retorna limpo
+                if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
+                    return text;
+                }
+
+                // Caso venha como serial em texto
+                if (/^\d+(\.\d+)?$/.test(text)) {
+                    return excelSerialToDateString(Number(text));
+                }
+
+                return text;
+            }
+
+            function excelSerialToDateString(serial) {
+                const utcDays = Math.floor(serial - 25569);
+                const utcValue = utcDays * 86400;
+                const dateInfo = new Date(utcValue * 1000);
+
+                if (isNaN(dateInfo)) return String(serial);
+
+                const day = String(dateInfo.getUTCDate()).padStart(2, '0');
+                const month = String(dateInfo.getUTCMonth() + 1).padStart(2, '0');
+                const year = dateInfo.getUTCFullYear();
+
+                return `${day}/${month}/${year}`;
+            }
+
+            function formatDateObject(date) {
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = date.getFullYear();
+
+                return `${day}/${month}/${year}`;
+            }
+
+            function parseCSVLine(line, separator) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                        current += char;
+                    } else if (char === separator && !inQuotes) {
+                        result.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current);
+
+                return result;
+            }
+
+            function downloadFile(filename, content) {
+                const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+            }
+
+            function showStatus(message, type) {
+                statusDiv.textContent = message;
+                statusDiv.className = type;
+                statusDiv.style.display = 'block';
+
+                if (type === 'success') {
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                    }, 5000);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
