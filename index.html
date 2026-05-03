@@ -171,7 +171,6 @@
             const fileInput = document.getElementById('arquivoEntrada');
             const fileFormatInfo = document.getElementById('fileFormatInfo');
 
-            // Atualiza info do formato baseado na seleção
             tipoSelect.addEventListener('change', function() {
                 if (this.value === 'csvToExcel') {
                     fileFormatInfo.textContent = 'Formatos aceitos: CSV ou TXT (separado por vírgula ou ponto e vírgula)';
@@ -217,7 +216,6 @@
                 reader.onload = function(e) {
                     try {
                         const content = e.target.result;
-
                         const lines = content.split('\n').filter(line => line.trim() !== '');
                         if (lines.length === 0) {
                             throw new Error("Arquivo vazio.");
@@ -229,7 +227,6 @@
                         const separator = semicolonCount > commaCount ? ';' : ',';
 
                         const excelData = [];
-
                         const headerMap = {
                             'B7_COD': 'PRODUTO',
                             'B7_TIPO': 'TIPO',
@@ -247,23 +244,16 @@
 
                         for (let i = 1; i < lines.length; i++) {
                             if (lines[i].trim() === '') continue;
-
                             const row = parseCSVLine(lines[i], separator);
-
                             const cleanRow = row.map((cell, index) => {
-                                cell = cell.trim();
-                                cell = cell.replace(/^"|"$/g, '');
-
-                                // QUANTIDADE
+                                cell = cell.trim().replace(/^"|"$/g, '');
                                 if (index === 4) {
                                     const numeroFormatado = cell.replace(/\./g, '').replace(',', '.');
                                     const numero = parseFloat(numeroFormatado);
                                     return isNaN(numero) ? 0 : numero;
                                 }
-
                                 return cell;
                             });
-
                             excelData.push(cleanRow);
                         }
 
@@ -277,20 +267,13 @@
                         const ano = dataAtual.getFullYear();
 
                         const nomeArquivo = `RetEdit_${filial}_${mes}_${ano}.xlsx`;
-
                         XLSX.writeFile(workbook, nomeArquivo);
-
                         showStatus("Arquivo Excel gerado com sucesso!", "success");
                     } catch (error) {
                         showStatus("Erro ao processar o arquivo: " + error.message, "error");
                         console.error(error);
                     }
                 };
-
-                reader.onerror = function() {
-                    showStatus("Erro ao ler o arquivo.", "error");
-                };
-
                 reader.readAsText(file, 'UTF-8');
             }
 
@@ -330,8 +313,6 @@
 
                         const headerLine = jsonData[0].map(h => String(h).trim());
                         const newHeader = headerLine.map(h => headerMap[h] || h);
-
-                        // Garante que a última coluna exportada seja B7_YCODMOT
                         const lastValidColumnName = 'B7_YCODMOT';
                         const lastValidIndex = newHeader.indexOf(lastValidColumnName);
 
@@ -340,27 +321,26 @@
                         }
 
                         const trimmedHeader = newHeader.slice(0, lastValidIndex + 1);
-
                         let csvContent = '';
                         csvContent += trimmedHeader.join(';') + '\n';
 
                         for (let i = 1; i < jsonData.length; i++) {
                             const row = jsonData[i];
-                            if (row.length === 0 || (row.length === 1 && row[0] === '')) continue;
+                            
+                            // MELHORIA AQUI: Verifica se a linha realmente tem conteúdo antes de processar
+                            // Isso evita as linhas com ;;;;;;; no final do arquivo
+                            const hasContent = row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '');
+                            if (!hasContent) continue;
 
                             const trimmedRow = row.slice(0, lastValidIndex + 1);
-
                             const processedRow = trimmedRow.map((cell, index) => {
                                 let cellValue = cell;
-
-                                // Trata especificamente a coluna DATA
                                 if (trimmedHeader[index] === 'B7_DATA') {
                                     cellValue = formatDateToDDMMYYYY(cellValue);
                                 } else {
                                     cellValue = cellValue !== undefined && cellValue !== null ? String(cellValue) : '';
                                     cellValue = cellValue.replace(/\n/g, ' ').trim();
                                 }
-
                                 return cellValue;
                             });
 
@@ -373,58 +353,28 @@
                         const ano = dataAtual.getFullYear();
 
                         const nomeArquivo = `Retorno_${filial}_${mes}_${ano}.csv`;
-
                         const bom = "\uFEFF";
                         downloadFile(nomeArquivo, bom + csvContent);
-
                         showStatus("Arquivo CSV gerado com sucesso!", "success");
                     } catch (error) {
                         showStatus("Erro ao processar o arquivo: " + error.message, "error");
                         console.error(error);
                     }
                 };
-
-                reader.onerror = function() {
-                    showStatus("Erro ao ler o arquivo.", "error");
-                };
-
                 reader.readAsArrayBuffer(file);
             }
 
             function formatDateToDDMMYYYY(value) {
-                if (value === undefined || value === null || value === '') {
-                    return '';
-                }
-
-                // Se já vier como objeto Date
-                if (value instanceof Date && !isNaN(value)) {
-                    return formatDateObject(value);
-                }
-
-                // Se vier como número serial do Excel
-                if (typeof value === 'number' && !isNaN(value)) {
-                    return excelSerialToDateString(value);
-                }
-
-                // Se vier como texto
+                if (value === undefined || value === null || value === '') return '';
+                if (value instanceof Date && !isNaN(value)) return formatDateObject(value);
+                if (typeof value === 'number' && !isNaN(value)) return excelSerialToDateString(value);
+                
                 let text = String(value).trim();
-
-                // Caso esteja no formato ISO ou semelhante interpretável por Date
                 const parsedDate = new Date(text);
-                if (!isNaN(parsedDate) && /\d/.test(text)) {
-                    return formatDateObject(parsedDate);
-                }
-
-                // Caso já esteja em DD/MM/AAAA, apenas retorna limpo
-                if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
-                    return text;
-                }
-
-                // Caso venha como serial em texto
-                if (/^\d+(\.\d+)?$/.test(text)) {
-                    return excelSerialToDateString(Number(text));
-                }
-
+                if (!isNaN(parsedDate) && /\d/.test(text)) return formatDateObject(parsedDate);
+                if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) return text;
+                if (/^\d+(\.\d+)?$/.test(text)) return excelSerialToDateString(Number(text));
+                
                 return text;
             }
 
@@ -432,13 +382,10 @@
                 const utcDays = Math.floor(serial - 25569);
                 const utcValue = utcDays * 86400;
                 const dateInfo = new Date(utcValue * 1000);
-
                 if (isNaN(dateInfo)) return String(serial);
-
                 const day = String(dateInfo.getUTCDate()).padStart(2, '0');
                 const month = String(dateInfo.getUTCMonth() + 1).padStart(2, '0');
                 const year = dateInfo.getUTCFullYear();
-
                 return `${day}/${month}/${year}`;
             }
 
@@ -446,7 +393,6 @@
                 const day = String(date.getDate()).padStart(2, '0');
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const year = date.getFullYear();
-
                 return `${day}/${month}/${year}`;
             }
 
@@ -454,10 +400,8 @@
                 const result = [];
                 let current = '';
                 let inQuotes = false;
-
                 for (let i = 0; i < line.length; i++) {
                     const char = line[i];
-
                     if (char === '"') {
                         inQuotes = !inQuotes;
                         current += char;
@@ -469,7 +413,6 @@
                     }
                 }
                 result.push(current);
-
                 return result;
             }
 
@@ -489,11 +432,8 @@
                 statusDiv.textContent = message;
                 statusDiv.className = type;
                 statusDiv.style.display = 'block';
-
                 if (type === 'success') {
-                    setTimeout(() => {
-                        statusDiv.style.display = 'none';
-                    }, 5000);
+                    setTimeout(() => { statusDiv.style.display = 'none'; }, 5000);
                 }
             }
         });
